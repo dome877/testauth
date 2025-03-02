@@ -68,13 +68,8 @@ const CONFIG = {
     window.location.href = logoutUrl;
   }
   
-  // Exchange authorization code for tokens using Lambda
-  async function exchangeCodeForTokens(authorizationCode) {
-    const loadingDiv = document.getElementById('loading');
-    if (loadingDiv) {
-      loadingDiv.innerHTML = '<div class="loading-spinner"></div><p>Exchanging code for tokens...</p>';
-    }
-    
+// Update your exchangeCodeForTokens function with debugging
+async function exchangeCodeForTokens(authorizationCode) {
     try {
       const response = await fetch(CONFIG.tokenExchangeUrl, {
         method: 'POST',
@@ -86,12 +81,31 @@ const CONFIG = {
         })
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to exchange code for tokens');
+      // Get raw response text first
+      const responseText = await response.text();
+      console.log("Raw token response:", responseText);
+      
+      // Parse the response
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log("Parsed token data:", data);
+      } catch (e) {
+        console.error("Failed to parse response:", e);
+        throw new Error("Invalid JSON response from token endpoint");
       }
       
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to exchange code for tokens');
+      }
+      
+      // Log token information before storage
+      console.log("About to store tokens:", {
+        idToken: data.idToken ? "present" : "missing",
+        accessToken: data.accessToken ? "present" : "missing",
+        refreshToken: data.refreshToken ? "present" : "missing",
+        expiresIn: data.expiresIn
+      });
       
       // Store tokens
       storeTokens(
@@ -101,23 +115,20 @@ const CONFIG = {
         data.expiresIn
       );
       
+      // Verify tokens were stored
+      console.log("Tokens after storage:", {
+        idToken: localStorage.getItem('idToken') ? "present" : "missing",
+        accessToken: localStorage.getItem('accessToken') ? "present" : "missing",
+        refreshToken: localStorage.getItem('refreshToken') ? "present" : "missing"
+      });
+      
       return true;
     } catch (error) {
       console.error('Token exchange error:', error);
-      
-      if (loadingDiv) {
-        loadingDiv.innerHTML = `
-          <div class="error-message">
-            <h3>Authentication Error</h3>
-            <p>${error.message}</p>
-            <button onclick="window.Auth.redirectToLogin()">Try Again</button>
-          </div>
-        `;
-      }
-      
       return false;
     }
   }
+  
   
   // Initialize authentication
   async function initAuth() {
