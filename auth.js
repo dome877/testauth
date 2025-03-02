@@ -71,6 +71,19 @@ function logout() {
   window.location.href = logoutUrl;
 }
 
+// Track token exchange state in sessionStorage (persists across page navigations)
+function isExchangingTokens() {
+  return sessionStorage.getItem('exchangingTokens') === 'true';
+}
+
+function setExchangingTokens(value) {
+  if (value) {
+    sessionStorage.setItem('exchangingTokens', 'true');
+  } else {
+    sessionStorage.removeItem('exchangingTokens');
+  }
+}
+
 // Update your handleAuthenticationRedirect function
 function handleAuthenticationRedirect() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -79,19 +92,12 @@ function handleAuthenticationRedirect() {
   console.log('AUTH.JS: URL parameters check running');
   console.log('URL parameters:', Object.fromEntries(urlParams));
   
-  // Don't process if already being processed
-  if (authorizationCode && sessionStorage.getItem('processingAuthCode') === authorizationCode) {
-    console.log('This code is already being processed, waiting for completion');
+  // Don't process if already processing
+  if (isExchangingTokens()) {
+    console.log('Token exchange already in progress');
     return;
   }
   
-  // Don't process if we already have valid tokens
-  if (authorizationCode && isAuthenticated()) {
-    console.log('Already authenticated, no need to process code');
-    window.history.replaceState({}, document.title, window.location.pathname);
-    return;
-  }
-
   if (authorizationCode) {
     console.log('Found authorization code - calling exchangeCodeForTokens');
     exchangeCodeForTokens(authorizationCode);
@@ -105,8 +111,8 @@ async function exchangeCodeForTokens(authorizationCode) {
   try {
     console.log('Exchanging authorization code for tokens...');
     
-    // Mark this code as being processed (prevents duplicate processing)
-    sessionStorage.setItem('processingAuthCode', authorizationCode);
+    // Mark that we're in the exchange process
+    setExchangingTokens(true);
     
     const response = await fetch(CONFIG.tokenExchangeUrl, {
       method: 'POST',
@@ -130,23 +136,25 @@ async function exchangeCodeForTokens(authorizationCode) {
         data.expiresIn
       );
       
-      // Clear the processing flag
-      sessionStorage.removeItem('processingAuthCode');
-      
-      // IMPORTANT: Only after successful token exchange, update URL
+      // Exchange complete - remove URL parameters and flag
       window.history.replaceState({}, document.title, window.location.pathname);
+      setExchangingTokens(false);
+      
+      // Force reload the page for a clean state
+      window.location.reload();
       return true;
     } else {
       console.error('Token exchange failed:', data.error, data.details);
-      sessionStorage.removeItem('processingAuthCode');
+      setExchangingTokens(false);
       return false;
     }
   } catch (error) {
     console.error('Token exchange error:', error);
-    sessionStorage.removeItem('processingAuthCode');
+    setExchangingTokens(false);
     return false;
   }
 }
+
 
 // Initialize authentication
 async function initAuth() {
@@ -154,36 +162,42 @@ async function initAuth() {
   const loadingDiv = document.getElementById('loading');
   
   try {
-    // Check for authorization code in URL
+    // Check if we're in the middle of exchanging tokens
+    if (isExchangingTokens()) {
+      console.log('Token exchange in progress, waiting...');
+      if (appDiv) appDiv.style.display = 'none';
+      if (loadingDiv) {
+        loadingDiv.style.display = 'block';
+        loadingDiv.innerHTML = '<p>Completing authentication...</p>';
+      }
+      return false;
+    }
+    
+    // Check if there's a code in the URL that needs processing
     const urlParams = new URLSearchParams(window.location.search);
     const authCode = urlParams.get('code');
     
-    if (authCode && !authCodeProcessed) {
-      // Exchange code for tokens (handle in existing function)
+    if (authCode) {
+      console.log('Found auth code, processing...');
+      if (appDiv) appDiv.style.display = 'none';
+      if (loadingDiv) loadingDiv.style.display = 'block';
       handleAuthenticationRedirect();
-      
-      if (isAuthenticated()) {
-        // Show application
-        if (appDiv) appDiv.style.display = 'block';
-        if (loadingDiv) loadingDiv.style.display = 'none';
-        return true;
-      }
+      return false;
     }
     
-    // Check if user is already authenticated
+    // Normal auth check when no code is present
     if (isAuthenticated()) {
-      // Show application
       if (appDiv) appDiv.style.display = 'block';
       if (loadingDiv) loadingDiv.style.display = 'none';
       return true;
     }
     
-    // Not authenticated, redirect to login
+    // Only redirect if not authenticated AND not in token exchange
+    console.log('Not authenticated, redirecting to login');
     redirectToLogin();
     return false;
   } catch (error) {
     console.error('Authentication error:', error);
-    
     if (loadingDiv) {
       loadingDiv.innerHTML = `
         <div class="error-message">
@@ -193,7 +207,6 @@ async function initAuth() {
         </div>
       `;
     }
-    
     return false;
   }
 }
