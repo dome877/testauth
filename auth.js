@@ -5,7 +5,7 @@ const CONFIG = {
   cognitoUrl: 'https://eu-north-1bad4kil2h.auth.eu-north-1.amazoncognito.com',
   clientId: 'sufnmmml754ju6m6en2cerr4t',
   redirectUri: window.location.origin + window.location.pathname,
-  tokenExchangeUrl: 'https://0izwpxiog3.execute-api.eu-north-1.amazonaws.com/prod/token-exchange',
+  tokenExchangeUrl: 'https://0izwpxiog3.execute-api.eu-north-1.amazonaws.com/prod/token-exchange', // Update with your API Gateway URL
   scope: 'email openid phone'
 };
 
@@ -14,10 +14,7 @@ let authCodeProcessed = false;
 
 // Check if user is authenticated
 function isAuthenticated() {
-  const hasToken = !!getIdToken();
-  const notExpired = !isTokenExpired();
-  console.log('Auth check - Has token:', hasToken, 'Not expired:', notExpired);
-  return hasToken && notExpired;
+  return !!getIdToken() && !isTokenExpired();
 }
 
 // Check if token is expired
@@ -44,7 +41,6 @@ function getRefreshToken() {
 
 // Store tokens securely
 function storeTokens(idToken, accessToken, refreshToken, expiresIn = 3600) {
-  console.log('Storing tokens with expiry:', expiresIn);
   localStorage.setItem('idToken', idToken);
   localStorage.setItem('accessToken', accessToken);
   if (refreshToken) {
@@ -62,12 +58,10 @@ function clearTokens() {
   localStorage.removeItem('tokenExpiration');
 }
 
-// Redirect to Cognito login - with full logout first
+// Redirect to Cognito login
 function redirectToLogin() {
-  // First, log out from Cognito to clear any existing sessions
-  const logoutUrl = `${CONFIG.cognitoUrl}/logout?client_id=${CONFIG.clientId}&logout_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
-  console.log('Redirecting to complete logout first, then will redirect to login');
-  window.location.href = logoutUrl;
+  const loginUrl = `${CONFIG.cognitoUrl}/login?client_id=${CONFIG.clientId}&response_type=code&scope=${CONFIG.scope}&redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
+  window.location.href = loginUrl;
 }
 
 // Logout user
@@ -78,7 +72,7 @@ function logout() {
 }
 
 // Handle authentication redirect
-async function handleAuthenticationRedirect() {
+function handleAuthenticationRedirect() {
   if (authCodeProcessed) {
     console.log('Auth code already processed, skipping duplicate handling');
     return;
@@ -88,6 +82,7 @@ async function handleAuthenticationRedirect() {
   const authorizationCode = urlParams.get('code');
 
   console.log('AUTH.JS: URL parameters check running');
+  console.log('URL parameters:', Object.fromEntries(urlParams));
   console.log('Authorization code present in URL:', authorizationCode ? 'Yes (first 10 chars: ' + authorizationCode.substring(0, 10) + '...)' : 'No');
 
   if (authorizationCode) {
@@ -95,27 +90,12 @@ async function handleAuthenticationRedirect() {
     authCodeProcessed = true;
     
     console.log('Found authorization code - calling exchangeCodeForTokens');
-    
-    // First remove the code from URL for security
-    window.history.replaceState({}, document.title, window.location.pathname);
-    
-    // Then exchange the code
-    const success = await exchangeCodeForTokens(authorizationCode);
-    
-    if (success) {
-      console.log('Authentication successful! Tokens stored.');
-      // Refresh the page to start fresh with tokens
-      window.location.reload();
-      return true;
-    } else {
-      console.error('Failed to exchange code for tokens');
-      // Clear any partially stored tokens
-      clearTokens();
-      return false;
-    }
+    exchangeCodeForTokens(authorizationCode).then(() => {
+      // Remove code from URL after exchange is complete
+      window.history.replaceState({}, document.title, window.location.pathname);
+    });
   } else {
     console.log('No authorization code found in URL');
-    return false;
   }
 }
 
@@ -130,8 +110,7 @@ async function exchangeCodeForTokens(authorizationCode) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        code: authorizationCode,
-        redirectUri: CONFIG.redirectUri // Make sure to send this if your backend needs it
+        code: authorizationCode
       })
     });
     
@@ -141,8 +120,8 @@ async function exchangeCodeForTokens(authorizationCode) {
     // Parse the JSON response
     const data = await response.json();
     
-    console.log('Token exchange response received');
-    
+    console.log('Full token response:', data);
+
     if (response.ok) {
       console.log('Token exchange successful');
       
@@ -151,12 +130,12 @@ async function exchangeCodeForTokens(authorizationCode) {
         data.idToken, 
         data.accessToken, 
         data.refreshToken, 
-        data.expiresIn || 3600
+        data.expiresIn
       );
       
       return true;
     } else {
-      console.error('Token exchange failed:', data.error, data.details || '');
+      console.error('Token exchange failed:', data.error, data.details);
       return false;
     }
   } catch (error) {
@@ -167,24 +146,20 @@ async function exchangeCodeForTokens(authorizationCode) {
 
 // Initialize authentication
 async function initAuth() {
-  console.log('Initializing authentication...');
   const appDiv = document.getElementById('app');
   const loadingDiv = document.getElementById('loading');
   
   try {
-    // First check if we're in the middle of a code exchange
+    // Check for authorization code in URL
     const urlParams = new URLSearchParams(window.location.search);
     const authCode = urlParams.get('code');
     
-    if (authCode) {
-      console.log('Code found in URL, handling authentication redirect');
-      const success = await handleAuthenticationRedirect();
+    if (authCode && !authCodeProcessed) {
+      // Exchange code for tokens (handle in existing function)
+      handleAuthenticationRedirect();
       
-      // Wait a moment for tokens to be properly stored
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      if (success && isAuthenticated()) {
-        console.log('Authentication successful, showing app');
+      if (isAuthenticated()) {
+        // Show application
         if (appDiv) appDiv.style.display = 'block';
         if (loadingDiv) loadingDiv.style.display = 'none';
         return true;
@@ -193,24 +168,13 @@ async function initAuth() {
     
     // Check if user is already authenticated
     if (isAuthenticated()) {
-      console.log('User already authenticated, showing app');
+      // Show application
       if (appDiv) appDiv.style.display = 'block';
       if (loadingDiv) loadingDiv.style.display = 'none';
-      setupTokenRefresh(); // Setup refresh if authenticated
       return true;
     }
     
-    // Special handling - if we just completed a Cognito logout
-    // This check helps break the Cognito session loop
-    if (urlParams.has('logout') || urlParams.has('signout')) {
-      // Now redirect to actual login
-      const loginUrl = `${CONFIG.cognitoUrl}/login?client_id=${CONFIG.clientId}&response_type=code&scope=${CONFIG.scope}&redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
-      window.location.href = loginUrl;
-      return false;
-    }
-    
-    // Not authenticated and no code, redirect to login
-    console.log('User not authenticated, redirecting to login');
+    // Not authenticated, redirect to login
     redirectToLogin();
     return false;
   } catch (error) {
@@ -269,31 +233,32 @@ async function refreshToken() {
 }
 
 function debugTokens() {
-  console.log("Debugging authentication state:");
-  console.log("Is authenticated:", isAuthenticated());
-  console.log("Token expiration:", localStorage.getItem('tokenExpiration'));
-  console.log("Current time:", new Date().getTime());
-  console.log("ID token exists:", !!getIdToken());
-  console.log("Access token exists:", !!getAccessToken());
-  console.log("Refresh token exists:", !!getRefreshToken());
+  console.log("Checking all possible token locations:");
+  
+  // Check localStorage with different possible key names
+  const localStorageKeys = ["idToken", "id_token", "token", "auth", "authentication"];
+  localStorageKeys.forEach(key => {
+    const value = localStorage.getItem(key);
+    if (value) console.log(`Found in localStorage['${key}']: ${value.substring(0, 10)}...`);
+  });
+  
+  // Check sessionStorage
+  const sessionStorageKeys = ["idToken", "id_token", "token", "auth", "authentication"];
+  sessionStorageKeys.forEach(key => {
+    const value = sessionStorage.getItem(key);
+    if (value) console.log(`Found in sessionStorage['${key}']: ${value.substring(0, 10)}...`);
+  });
+  
+  // Look for common objects in window scope
+  if (window.auth && window.auth.token) console.log("Found in window.auth.token");
+  if (window.authToken) console.log("Found in window.authToken");
+  
+  // Check document cookies
+  console.log("Cookies:", document.cookie);
 }
 
 // Only run once when the page loads
-document.addEventListener('DOMContentLoaded', async () => {
-  console.log('DOM loaded, handling authentication...');
-  
-  // If there's a code in the URL, handle it
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('code')) {
-    await handleAuthenticationRedirect();
-  }
-  
-  // Check if we need to initialize the app
-  if (typeof initApp === 'function') {
-    console.log('Initializing app...');
-    initApp();
-  }
-});
+document.addEventListener('DOMContentLoaded', handleAuthenticationRedirect);
 
 // Export functions to window object
 window.Auth = {
