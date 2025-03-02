@@ -101,12 +101,7 @@ async function exchangeCodeForTokens(authorizationCode) {
         data.expiresIn
       );
       
-      console.log("Tokens stored successfully:");
-console.log("ID Token:", data.idToken.substring(0, 20) + "...");
-console.log("Access Token:", data.accessToken.substring(0, 20) + "...");
-if (data.refreshToken) {
-  console.log("Refresh Token:", data.refreshToken.substring(0, 20) + "...");
-}
+
       return true;
     } else {
       console.error('Token exchange failed:', data.error, data.details);
