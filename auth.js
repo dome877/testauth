@@ -234,3 +234,28 @@ async function exchangeCodeForTokens(authorizationCode) {
     setupTokenRefresh
   };
   
+
+  function debugTokens() {
+    console.log("Checking all possible token locations:");
+    
+    // Check localStorage with different possible key names
+    const localStorageKeys = ["idToken", "id_token", "token", "auth", "authentication"];
+    localStorageKeys.forEach(key => {
+      const value = localStorage.getItem(key);
+      if (value) console.log(`Found in localStorage['${key}']: ${value.substring(0, 10)}...`);
+    });
+    
+    // Check sessionStorage
+    const sessionStorageKeys = ["idToken", "id_token", "token", "auth", "authentication"];
+    sessionStorageKeys.forEach(key => {
+      const value = sessionStorage.getItem(key);
+      if (value) console.log(`Found in sessionStorage['${key}']: ${value.substring(0, 10)}...`);
+    });
+    
+    // Look for common objects in window scope
+    if (window.auth && window.auth.token) console.log("Found in window.auth.token");
+    if (window.authToken) console.log("Found in window.authToken");
+    
+    // Check document cookies
+    console.log("Cookies:", document.cookie);
+  }
