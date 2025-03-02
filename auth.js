@@ -1,42 +1,19 @@
-// Production auth.js for GitHub Pages with AWS Lambda token exchange
+// auth.js - Complete authentication handling for Cognito with Lambda token exchange
 
-// Configuration
+// Configuration 
 const CONFIG = {
   cognitoUrl: 'https://eu-north-1bad4kil2h.auth.eu-north-1.amazoncognito.com',
   clientId: 'sufnmmml754ju6m6en2cerr4t',
   redirectUri: window.location.origin + window.location.pathname,
-  tokenExchangeUrl: 'https://0izwpxiog3.execute-api.eu-north-1.amazonaws.com/prod/token-exchange', // Update with your API Gateway URL
+  tokenExchangeUrl: 'https://0izwpxiog3.execute-api.eu-north-1.amazonaws.com/prod/token-exchange',
   scope: 'email openid phone'
 };
 
-// Check if user is authenticated
-function isAuthenticated() {
-  return !!getIdToken() && !isTokenExpired();
-}
+// Token storage and retrieval functions
+function getIdToken() { return localStorage.getItem('idToken'); }
+function getAccessToken() { return localStorage.getItem('accessToken'); }
+function getRefreshToken() { return localStorage.getItem('refreshToken'); }
 
-// Check if token is expired
-function isTokenExpired() {
-  const expiration = localStorage.getItem('tokenExpiration');
-  if (!expiration) return true;
-  return new Date().getTime() > parseInt(expiration);
-}
-
-// Securely get ID token
-function getIdToken() {
-  return localStorage.getItem('idToken');
-}
-
-// Securely get access token
-function getAccessToken() {
-  return localStorage.getItem('accessToken');
-}
-
-// Get refresh token
-function getRefreshToken() {
-  return localStorage.getItem('refreshToken');
-}
-
-// Store tokens securely
 function storeTokens(idToken, accessToken, refreshToken, expiresIn = 3600) {
   localStorage.setItem('idToken', idToken);
   localStorage.setItem('accessToken', accessToken);
@@ -47,7 +24,6 @@ function storeTokens(idToken, accessToken, refreshToken, expiresIn = 3600) {
   localStorage.setItem('tokenExpiration', expirationTime.toString());
 }
 
-// Clear tokens
 function clearTokens() {
   localStorage.removeItem('idToken');
   localStorage.removeItem('accessToken');
@@ -55,117 +31,138 @@ function clearTokens() {
   localStorage.removeItem('tokenExpiration');
 }
 
-// Redirect to Cognito login
+// Authentication state functions
+function isAuthenticated() {
+  return !!getIdToken() && !isTokenExpired();
+}
+
+function isTokenExpired() {
+  const expiration = localStorage.getItem('tokenExpiration');
+  if (!expiration) return true;
+  return new Date().getTime() > parseInt(expiration);
+}
+
+// Login/logout navigation
 function redirectToLogin() {
   const loginUrl = `${CONFIG.cognitoUrl}/login?client_id=${CONFIG.clientId}&response_type=code&scope=${CONFIG.scope}&redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
   window.location.href = loginUrl;
 }
 
-// Logout user
 function logout() {
   clearTokens();
   const logoutUrl = `${CONFIG.cognitoUrl}/logout?client_id=${CONFIG.clientId}&logout_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
   window.location.href = logoutUrl;
 }
 
-
-// Add this function to auth.js
-function handleAuthenticationRedirect() {
-const urlParams = new URLSearchParams(window.location.search);
-const authorizationCode = urlParams.get('code');
-
-console.log('AUTH.JS: URL parameters check running');
-console.log('URL parameters:', Object.fromEntries(urlParams));
-console.log('Authorization code present in URL:', authorizationCode ? 'Yes (first 10 chars: ' + authorizationCode.substring(0, 10) + '...)' : 'No');
-
-if (authorizationCode) {
-  console.log('Found authorization code - calling exchangeCodeForTokens');
-  exchangeCodeForTokens(authorizationCode);
-} else {
-  console.log('No authorization code found in URL');
-}
-}
-
-// Immediate execution approach that doesn't rely on DOMContentLoaded
-(function() {
-console.log('AUTH.JS: Self-executing function running');
-
-// Run immediately 
-handleAuthenticationRedirect();
-
-// Also attach to DOMContentLoaded as backup
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('AUTH.JS: DOMContentLoaded fired');
-  handleAuthenticationRedirect();
-});
-})();
-
-
-// Also add this event listener to auth.js
-document.addEventListener('DOMContentLoaded', handleAuthenticationRedirect);
-
-
-// Exchange authorization code for tokens via Lambda
+// Token exchange with Lambda
 async function exchangeCodeForTokens(authorizationCode) {
-try {
-  console.log('Exchanging authorization code for tokens...');
-  
-  const response = await fetch(CONFIG.tokenExchangeUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      code: authorizationCode
-    })
-  });
-  
-  // Log response status for debugging
-  console.log('Token exchange response status:', response.status);
-  
-  // Parse the JSON response
-  const data = await response.json();
-  
-  console.log('Full token response:', data);
-  
-  // Direct access to tokens (Lambda returns them at the top level)
-  const tokens = typeof data.body === 'string' 
-    ? JSON.parse(data.body)  // Parse if body is a string
-    : data.body;             // Use directly if already parsed
+  try {
+    console.log('Exchanging authorization code for tokens...');
     
-  console.log('Parsed tokens structure:', 
-    Object.keys(tokens).reduce((acc, key) => {
-      acc[key] = key.includes('Token') ? 'Present (hidden)' : tokens[key];
-      return acc;
-    }, {})
-  );
+    // Create the request payload - this is the critical part that was failing
+    const response = await fetch(CONFIG.tokenExchangeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        code: authorizationCode
+      })
+    });
 
-
-  if (response.ok) {
-    console.log('Token exchange successful');
+    console.log('Token exchange response status:', response.status);
     
-    // Store the tokens securely
+    const data = await response.json();
+    console.log('Full token response:', data);
+    
+    // Handle different API Gateway response formats
+    let tokens;
+    
+    if (data.body) {
+      // API Gateway with proxy integration
+      tokens = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
+    } else {
+      // API Gateway without proxy integration
+      tokens = data;
+    }
+    
+    console.log('Parsed token data:', tokens);
+    
+    // Check for errors
+    if (tokens.error) {
+      console.error('Token exchange failed:', tokens.error);
+      return false;
+    }
+    
+    // Check for required tokens
+    if (!tokens.idToken && !tokens.id_token) {
+      console.error('Required tokens not found in response');
+      return false;
+    }
+    
+    // Store tokens (handling different property naming conventions)
     storeTokens(
-      data.idToken, 
-      data.accessToken, 
-      data.refreshToken, 
-      data.expiresIn
+      tokens.idToken || tokens.id_token,
+      tokens.accessToken || tokens.access_token,
+      tokens.refreshToken || tokens.refresh_token,
+      tokens.expiresIn || tokens.expires_in || 3600
     );
     
-
+    console.log('Token exchange successful');
     return true;
-  } else {
-    console.error('Token exchange failed:', data.error, data.details);
+  } catch (error) {
+    console.error('Token exchange error:', error);
     return false;
   }
-} catch (error) {
-  console.error('Token exchange error:', error);
-  return false;
-}
 }
 
+// Token refresh functionality
+function setupTokenRefresh() {
+  console.log('Setting up token refresh...');
+  
+  // Clear any existing refresh timer
+  if (window.tokenRefreshTimer) {
+    clearTimeout(window.tokenRefreshTimer);
+  }
+  
+  const expiration = localStorage.getItem('tokenExpiration');
+  if (!expiration) {
+    console.log('No token expiration found, skipping refresh setup');
+    return;
+  }
+  
+  const expirationTime = parseInt(expiration);
+  const now = new Date().getTime();
+  const timeUntilExpiry = expirationTime - now;
+  
+  // If token expires in less than 5 minutes, refresh it now
+  if (timeUntilExpiry < 300000) {
+    refreshToken();
+    return;
+  }
+  
+  // Otherwise, set timeout to refresh 5 minutes before expiry
+  const refreshTime = timeUntilExpiry - 300000;
+  window.tokenRefreshTimer = setTimeout(refreshToken, refreshTime);
+}
 
-// Initialize authentication
+async function refreshToken() {
+  const refreshTokenValue = getRefreshToken();
+  if (!refreshTokenValue) {
+    redirectToLogin();
+    return;
+  }
+  
+  try {
+    // For now, just redirect to login if token needs refresh
+    redirectToLogin();
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    redirectToLogin();
+  }
+}
+
+// Unified initialization function
 async function initAuth() {
   const appDiv = document.getElementById('app');
   const loadingDiv = document.getElementById('loading');
@@ -176,24 +173,32 @@ async function initAuth() {
     const authCode = urlParams.get('code');
     
     if (authCode) {
-      // Remove code from URL (for security)
+      console.log('Authorization code found in URL');
+      
+      // Remove code from URL for security
       window.history.replaceState({}, document.title, window.location.pathname);
       
       // Exchange code for tokens
       const success = await exchangeCodeForTokens(authCode);
       
       if (success) {
+        // Set up token refresh
+        setupTokenRefresh();
+        
         // Show application
         if (appDiv) appDiv.style.display = 'block';
         if (loadingDiv) loadingDiv.style.display = 'none';
         return true;
       } else {
-        return false;
+        throw new Error('Failed to exchange authorization code for tokens');
       }
     }
     
     // Check if user is already authenticated
     if (isAuthenticated()) {
+      // Set up token refresh
+      setupTokenRefresh();
+      
       // Show application
       if (appDiv) appDiv.style.display = 'block';
       if (loadingDiv) loadingDiv.style.display = 'none';
@@ -220,41 +225,20 @@ async function initAuth() {
   }
 }
 
-// Auto refresh the token before it expires
-function setupTokenRefresh() {
+// Debug function (optional)
+function debugTokens() {
+  console.log("Current token state:");
+  console.log("ID Token:", getIdToken() ? "Present" : "None");
+  console.log("Access Token:", getAccessToken() ? "Present" : "None");
+  console.log("Refresh Token:", getRefreshToken() ? "Present" : "None");
+  
   const expiration = localStorage.getItem('tokenExpiration');
-  if (!expiration) return;
-  
-  const expirationTime = parseInt(expiration);
-  const now = new Date().getTime();
-  const timeUntilExpiry = expirationTime - now;
-  
-  // If token expires in less than 5 minutes, refresh it now
-  if (timeUntilExpiry < 300000) {
-    refreshToken();
-    return;
-  }
-  
-  // Otherwise, set timeout to refresh 5 minutes before expiry
-  const refreshTime = timeUntilExpiry - 300000;
-  setTimeout(refreshToken, refreshTime);
-}
-
-// Refresh the token using the refresh token
-async function refreshToken() {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    redirectToLogin();
-    return;
-  }
-  
-  try {
-    // This would be another endpoint in your Lambda
-    // For now, just redirect to login if token is expired
-    redirectToLogin();
-  } catch (error) {
-    console.error('Token refresh error:', error);
-    redirectToLogin();
+  if (expiration) {
+    const expirationDate = new Date(parseInt(expiration));
+    console.log("Token Expiration:", expirationDate.toLocaleString());
+    console.log("Token Expired:", isTokenExpired() ? "Yes" : "No");
+  } else {
+    console.log("Token Expiration: Not set");
   }
 }
 
@@ -266,31 +250,9 @@ window.Auth = {
   getAccessToken,
   logout,
   redirectToLogin,
-  setupTokenRefresh
+  setupTokenRefresh,
+  debugTokens
 };
 
-
-function debugTokens() {
-  console.log("Checking all possible token locations:");
-  
-  // Check localStorage with different possible key names
-  const localStorageKeys = ["idToken", "id_token", "token", "auth", "authentication"];
-  localStorageKeys.forEach(key => {
-    const value = localStorage.getItem(key);
-    if (value) console.log(`Found in localStorage['${key}']: ${value.substring(0, 10)}...`);
-  });
-  
-  // Check sessionStorage
-  const sessionStorageKeys = ["idToken", "id_token", "token", "auth", "authentication"];
-  sessionStorageKeys.forEach(key => {
-    const value = sessionStorage.getItem(key);
-    if (value) console.log(`Found in sessionStorage['${key}']: ${value.substring(0, 10)}...`);
-  });
-  
-  // Look for common objects in window scope
-  if (window.auth && window.auth.token) console.log("Found in window.auth.token");
-  if (window.authToken) console.log("Found in window.authToken");
-  
-  // Check document cookies
-  console.log("Cookies:", document.cookie);
-}
+// Start authentication flow when the DOM is ready
+document.addEventListener('DOMContentLoaded', initAuth);
