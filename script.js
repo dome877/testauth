@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     // Get DOM elements
     const fetchBtn = document.getElementById('fetchBtn');
     const clearBtn = document.getElementById('clearBtn');
@@ -6,23 +6,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultDiv = document.getElementById('result');
     const statusSpan = document.getElementById('status');
     const timestampSpan = document.getElementById('timestamp');
-    const appDiv = document.getElementById('app');
-    const loadingDiv = document.getElementById('loading');
     
-    // Initialize authentication
-    const isAuthenticated = window.Auth.initAuth();
+    // Initialize authentication (async)
+    const isAuthenticated = await window.Auth.initAuth();
     
+    // Setup token refresh mechanism
     if (isAuthenticated) {
-        // Show app content if authenticated
-        appDiv.style.display = 'block';
-        loadingDiv.style.display = 'none';
+        window.Auth.setupTokenRefresh();
         
         // Add event listeners
         fetchBtn.addEventListener('click', fetchData);
         clearBtn.addEventListener('click', clearResults);
-        logoutBtn.addEventListener('click', function() {
-            window.Auth.logout();
-        });
+        logoutBtn.addEventListener('click', window.Auth.logout);
     }
     
     // Function to fetch data from the API
@@ -48,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => {
                 if (!response.ok) {
                     if (response.status === 401 || response.status === 403) {
-                        // Unauthorized, redirect to login
+                        // Token might be invalid or expired
                         window.Auth.redirectToLogin();
                         throw new Error('Authentication required');
                     }

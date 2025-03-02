@@ -203,3 +203,27 @@ pre {
 #saveTokens:hover {
     background-color: #27ae60;
 }
+
+/* Add to your styles.css */
+.error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 4px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.error-message button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.error-message button:hover {
+    background-color: #c82333;
+}
