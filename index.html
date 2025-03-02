@@ -7,31 +7,45 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>API Testing Website</h1>
-            <p>This simple website fetches data from the test API endpoint.</p>
-        </header>
-        
-        <main>
-            <div class="button-group">
-                <button id="fetchBtn">Fetch API Data</button>
-                <button id="clearBtn">Clear Results</button>
-            </div>
+    <!-- Main app container - hidden until authenticated -->
+    <div id="app" style="display: none;">
+        <div class="container">
+            <header>
+                <h1>API Testing Website</h1>
+                <p>This simple website fetches data from the test API endpoint.</p>
+                <div class="user-controls">
+                    <button id="logoutBtn">Logout</button>
+                </div>
+            </header>
             
-            <div id="result">
-                <p>API response will appear here...</p>
-            </div>
-        </main>
-        
-        <footer class="info">
-            <p><strong>API Endpoint:</strong> https://13c2qite21.execute-api.eu-north-1.amazonaws.com/dev/test</p>
-            <p><strong>Note:</strong> This is a test website. Authentication will be implemented later.</p>
-            <p><strong>Status:</strong> <span id="status">Ready</span></p>
-            <p><strong>Last Request:</strong> <span id="timestamp">None</span></p>
-        </footer>
+            <main>
+                <div class="button-group">
+                    <button id="fetchBtn">Fetch API Data</button>
+                    <button id="clearBtn">Clear Results</button>
+                </div>
+                
+                <div id="result">
+                    <p>API response will appear here...</p>
+                </div>
+            </main>
+            
+            <footer class="info">
+                <p><strong>API Endpoint:</strong> https://13c2qite21.execute-api.eu-north-1.amazonaws.com/dev/test</p>
+                <p><strong>Status:</strong> <span id="status">Ready</span></p>
+                <p><strong>Last Request:</strong> <span id="timestamp">None</span></p>
+            </footer>
+        </div>
+    </div>
+    
+    <!-- Loading screen displayed while checking authentication -->
+    <div id="loading" class="loading-container">
+        <div class="loading-spinner"></div>
+        <p>Checking authentication...</p>
     </div>
 
+    <!-- Load authentication script first -->
+    <script src="auth.js"></script>
+    <!-- Then load main application script -->
     <script src="script.js"></script>
 </body>
 </html>

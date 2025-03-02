@@ -2,13 +2,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements
     const fetchBtn = document.getElementById('fetchBtn');
     const clearBtn = document.getElementById('clearBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
     const resultDiv = document.getElementById('result');
     const statusSpan = document.getElementById('status');
     const timestampSpan = document.getElementById('timestamp');
+    const appDiv = document.getElementById('app');
+    const loadingDiv = document.getElementById('loading');
     
-    // Add event listeners to buttons
-    fetchBtn.addEventListener('click', fetchData);
-    clearBtn.addEventListener('click', clearResults);
+    // Initialize authentication
+    const isAuthenticated = window.Auth.initAuth();
+    
+    if (isAuthenticated) {
+        // Show app content if authenticated
+        appDiv.style.display = 'block';
+        loadingDiv.style.display = 'none';
+        
+        // Add event listeners
+        fetchBtn.addEventListener('click', fetchData);
+        clearBtn.addEventListener('click', clearResults);
+        logoutBtn.addEventListener('click', function() {
+            window.Auth.logout();
+        });
+    }
     
     // Function to fetch data from the API
     function fetchData() {
@@ -21,10 +36,22 @@ document.addEventListener('DOMContentLoaded', function() {
         // API endpoint
         const apiUrl = 'https://13c2qite21.execute-api.eu-north-1.amazonaws.com/dev/test';
         
-        // Fetch data from API
-        fetch(apiUrl)
+        // Get auth token
+        const idToken = window.Auth.getIdToken();
+        
+        // Fetch data from API with authorization header
+        fetch(apiUrl, {
+            headers: {
+                'Authorization': `Bearer ${idToken}`
+            }
+        })
             .then(response => {
                 if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                        // Unauthorized, redirect to login
+                        window.Auth.redirectToLogin();
+                        throw new Error('Authentication required');
+                    }
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 }
                 return response.json();
