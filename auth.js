@@ -108,51 +108,61 @@ document.addEventListener('DOMContentLoaded', handleAuthenticationRedirect);
 // Exchange authorization code for tokens via Lambda
 async function exchangeCodeForTokens(authorizationCode) {
 try {
-  console.log('Exchanging authorization code for tokens...', {codeLength: authorizationCode?.length});
-  
-  // Debug the exact payload being sent
-  const payload = JSON.stringify({ code: authorizationCode });
-  console.log('Payload being sent:', payload);
+  console.log('Exchanging authorization code for tokens...');
   
   const response = await fetch(CONFIG.tokenExchangeUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: payload
+    body: JSON.stringify({
+      code: authorizationCode
+    })
   });
-
+  
+  // Log response status for debugging
   console.log('Token exchange response status:', response.status);
   
+  // Parse the JSON response
   const data = await response.json();
+  
   console.log('Full token response:', data);
   
-  // Parse the response body if it's a string
-  const tokens = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
-  console.log('Parsed tokens structure:', tokens);
-  
-  // Check for errors! This is critical
-  if (tokens.error) {
-    console.error('Token exchange failed:', tokens.error);
+  // Direct access to tokens (Lambda returns them at the top level)
+  const tokens = typeof data.body === 'string' 
+    ? JSON.parse(data.body)  // Parse if body is a string
+    : data.body;             // Use directly if already parsed
+    
+  console.log('Parsed tokens structure:', 
+    Object.keys(tokens).reduce((acc, key) => {
+      acc[key] = key.includes('Token') ? 'Present (hidden)' : tokens[key];
+      return acc;
+    }, {})
+  );
+
+
+  if (response.ok) {
+    console.log('Token exchange successful');
+    
+    // Store the tokens securely
+    storeTokens(
+      data.idToken, 
+      data.accessToken, 
+      data.refreshToken, 
+      data.expiresIn
+    );
+    
+
+    return true;
+  } else {
+    console.error('Token exchange failed:', data.error, data.details);
     return false;
   }
-  
-  // Make sure tokens exist before proceeding
-  if (!tokens.idToken || !tokens.accessToken) {
-    console.error('Required tokens not found in response');
-    return false;
-  }
-  
-  // Store the tokens
-  storeTokens(tokens.idToken, tokens.accessToken, tokens.refreshToken, tokens.expiresIn);
-  console.log('Token exchange successful');
-  return true;
 } catch (error) {
   console.error('Token exchange error:', error);
   return false;
 }
 }
-
 
 
 // Initialize authentication
