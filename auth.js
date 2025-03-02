@@ -69,6 +69,23 @@ const CONFIG = {
   }
   
 
+// Add this new function to auth.js
+function handleAuthenticationRedirect() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const authorizationCode = urlParams.get('code');
+  
+  console.log('URL parameters:', Object.fromEntries(urlParams));
+  console.log('Authorization code present in URL:', authorizationCode ? 'Yes (first 10 chars: ' + authorizationCode.substring(0, 10) + '...)' : 'No');
+  
+  if (authorizationCode) {
+    exchangeCodeForTokens(authorizationCode);
+  }
+}
+
+// Also add this event listener to auth.js
+document.addEventListener('DOMContentLoaded', handleAuthenticationRedirect);
+
+
 // Exchange authorization code for tokens via Lambda
 async function exchangeCodeForTokens(authorizationCode) {
   try {
