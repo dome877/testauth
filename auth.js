@@ -81,24 +81,7 @@ async function exchangeCodeForTokens(authorizationCode) {
         })
       });
       
-      // Get raw response text first
-      const responseText = await response.text();
-      console.log("Raw token response:", responseText);
-      
-      // Parse the response
-      let data;
-      try {
-        data = JSON.parse(responseText);
-        console.log("Parsed token data:", data);
-      } catch (e) {
-        console.error("Failed to parse response:", e);
-        throw new Error("Invalid JSON response from token endpoint");
-      }
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to exchange code for tokens');
-      }
-      
+
       return true;
     } catch (error) {
       console.error('Token exchange error:', error);
