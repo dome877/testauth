@@ -163,6 +163,45 @@ async function initAuth() {
   }
 }
 
+function setupTokenRefresh() {
+  const expiration = localStorage.getItem('tokenExpiration');
+  if (!expiration) return;
+  
+  const expirationTime = parseInt(expiration);
+  const now = new Date().getTime();
+  const timeUntilExpiry = expirationTime - now;
+  
+  // If token expires in less than 5 minutes, refresh it now
+  if (timeUntilExpiry < 300000) {
+    refreshToken();
+    return;
+  }
+  
+  // Otherwise, set timeout to refresh 5 minutes before expiry
+  const refreshTime = timeUntilExpiry - 300000;
+  setTimeout(refreshToken, refreshTime);
+}
+
+// Add this function back too
+async function refreshToken() {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    redirectToLogin();
+    return;
+  }
+  
+  try {
+    // This would be another endpoint in your Lambda
+    // For now, just redirect to login if token is expired
+    redirectToLogin();
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    redirectToLogin();
+  }
+}
+
+
+
 // Export functions
 window.Auth = {
   initAuth,
@@ -170,7 +209,8 @@ window.Auth = {
   getIdToken,
   getAccessToken,
   logout,
-  redirectToLogin
+  redirectToLogin,
+  setupTokenRefresh  // Add this back
 };
 
 // Run auth initialization when DOM is loaded
