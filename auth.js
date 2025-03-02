@@ -90,6 +90,21 @@ async function exchangeCodeForTokens(authorizationCode) {
     // Parse the JSON response
     const data = await response.json();
     
+    console.log('Full token response:', data);
+    
+    // Direct access to tokens (Lambda returns them at the top level)
+    const tokens = typeof data.body === 'string' 
+      ? JSON.parse(data.body)  // Parse if body is a string
+      : data.body;             // Use directly if already parsed
+      
+    console.log('Parsed tokens structure:', 
+      Object.keys(tokens).reduce((acc, key) => {
+        acc[key] = key.includes('Token') ? 'Present (hidden)' : tokens[key];
+        return acc;
+      }, {})
+    );
+
+
     if (response.ok) {
       console.log('Token exchange successful');
       
