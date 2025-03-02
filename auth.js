@@ -9,6 +9,9 @@ const CONFIG = {
   scope: 'email openid phone'
 };
 
+// Track if we've already processed the code
+let authCodeProcessed = false;
+
 // Check if user is authenticated
 function isAuthenticated() {
   return !!getIdToken() && !isTokenExpired();
@@ -68,97 +71,78 @@ function logout() {
   window.location.href = logoutUrl;
 }
 
-
-// Add this function to auth.js
+// Handle authentication redirect
 function handleAuthenticationRedirect() {
-const urlParams = new URLSearchParams(window.location.search);
-const authorizationCode = urlParams.get('code');
+  if (authCodeProcessed) {
+    console.log('Auth code already processed, skipping duplicate handling');
+    return;
+  }
+  
+  const urlParams = new URLSearchParams(window.location.search);
+  const authorizationCode = urlParams.get('code');
 
-console.log('AUTH.JS: URL parameters check running');
-console.log('URL parameters:', Object.fromEntries(urlParams));
-console.log('Authorization code present in URL:', authorizationCode ? 'Yes (first 10 chars: ' + authorizationCode.substring(0, 10) + '...)' : 'No');
+  console.log('AUTH.JS: URL parameters check running');
+  console.log('URL parameters:', Object.fromEntries(urlParams));
+  console.log('Authorization code present in URL:', authorizationCode ? 'Yes (first 10 chars: ' + authorizationCode.substring(0, 10) + '...)' : 'No');
 
-if (authorizationCode) {
-  console.log('Found authorization code - calling exchangeCodeForTokens');
-  exchangeCodeForTokens(authorizationCode);
-} else {
-  console.log('No authorization code found in URL');
+  if (authorizationCode) {
+    // Mark as processed immediately to prevent duplicate calls
+    authCodeProcessed = true;
+    
+    console.log('Found authorization code - calling exchangeCodeForTokens');
+    exchangeCodeForTokens(authorizationCode).then(() => {
+      // Remove code from URL after exchange is complete
+      window.history.replaceState({}, document.title, window.location.pathname);
+    });
+  } else {
+    console.log('No authorization code found in URL');
+  }
 }
-}
-
-// Immediate execution approach that doesn't rely on DOMContentLoaded
-(function() {
-console.log('AUTH.JS: Self-executing function running');
-
-// Run immediately 
-handleAuthenticationRedirect();
-
-// Also attach to DOMContentLoaded as backup
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('AUTH.JS: DOMContentLoaded fired');
-  handleAuthenticationRedirect();
-});
-})();
-
-
-// Also add this event listener to auth.js
-document.addEventListener('DOMContentLoaded', handleAuthenticationRedirect);
-
 
 // Exchange authorization code for tokens via Lambda
 async function exchangeCodeForTokens(authorizationCode) {
-try {
-  console.log('Exchanging authorization code for tokens...');
-  
-  const response = await fetch(CONFIG.tokenExchangeUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      code: authorizationCode
-    })
-  });
-  
-  // Log response status for debugging
-  console.log('Token exchange response status:', response.status);
-  
-  // Parse the JSON response
-  const data = await response.json();
-  
-  console.log('Full token response:', data);
-  
-  // Direct access to tokens (Lambda returns them at the top level)
-  const tokens = typeof data.body === 'string' 
-    ? JSON.parse(data.body)  // Parse if body is a string
-    : data.body;             // Use directly if already parsed
+  try {
+    console.log('Exchanging authorization code for tokens...');
     
-
-
-
-  if (response.ok) {
-    console.log('Token exchange successful');
+    const response = await fetch(CONFIG.tokenExchangeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        code: authorizationCode
+      })
+    });
     
-    // Store the tokens securely
-    storeTokens(
-      data.idToken, 
-      data.accessToken, 
-      data.refreshToken, 
-      data.expiresIn
-    );
+    // Log response status for debugging
+    console.log('Token exchange response status:', response.status);
     
+    // Parse the JSON response
+    const data = await response.json();
+    
+    console.log('Full token response:', data);
 
-    return true;
-  } else {
-    console.error('Token exchange failed:', data.error, data.details);
+    if (response.ok) {
+      console.log('Token exchange successful');
+      
+      // Store the tokens securely
+      storeTokens(
+        data.idToken, 
+        data.accessToken, 
+        data.refreshToken, 
+        data.expiresIn
+      );
+      
+      return true;
+    } else {
+      console.error('Token exchange failed:', data.error, data.details);
+      return false;
+    }
+  } catch (error) {
+    console.error('Token exchange error:', error);
     return false;
   }
-} catch (error) {
-  console.error('Token exchange error:', error);
-  return false;
 }
-}
-
 
 // Initialize authentication
 async function initAuth() {
@@ -170,20 +154,15 @@ async function initAuth() {
     const urlParams = new URLSearchParams(window.location.search);
     const authCode = urlParams.get('code');
     
-    if (authCode) {
-      // Remove code from URL (for security)
-      window.history.replaceState({}, document.title, window.location.pathname);
+    if (authCode && !authCodeProcessed) {
+      // Exchange code for tokens (handle in existing function)
+      handleAuthenticationRedirect();
       
-      // Exchange code for tokens
-      const success = await exchangeCodeForTokens(authCode);
-      
-      if (success) {
+      if (isAuthenticated()) {
         // Show application
         if (appDiv) appDiv.style.display = 'block';
         if (loadingDiv) loadingDiv.style.display = 'none';
         return true;
-      } else {
-        return false;
       }
     }
     
@@ -253,18 +232,6 @@ async function refreshToken() {
   }
 }
 
-// Export functions to window object
-window.Auth = {
-  initAuth,
-  isAuthenticated,
-  getIdToken,
-  getAccessToken,
-  logout,
-  redirectToLogin,
-  setupTokenRefresh
-};
-
-
 function debugTokens() {
   console.log("Checking all possible token locations:");
   
@@ -289,3 +256,18 @@ function debugTokens() {
   // Check document cookies
   console.log("Cookies:", document.cookie);
 }
+
+// Only run once when the page loads
+document.addEventListener('DOMContentLoaded', handleAuthenticationRedirect);
+
+// Export functions to window object
+window.Auth = {
+  initAuth,
+  isAuthenticated,
+  getIdToken,
+  getAccessToken,
+  logout,
+  redirectToLogin,
+  setupTokenRefresh,
+  debugTokens
+};
