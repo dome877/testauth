@@ -68,27 +68,50 @@ const CONFIG = {
     window.location.href = logoutUrl;
   }
   
-// Update your exchangeCodeForTokens function with debugging
-async function exchangeCodeForTokens(authorizationCode) {
-    try {
-      const response = await fetch(CONFIG.tokenExchangeUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          code: authorizationCode
-        })
-      });
-      
 
+// Exchange authorization code for tokens via Lambda
+async function exchangeCodeForTokens(authorizationCode) {
+  try {
+    console.log('Exchanging authorization code for tokens...');
+    
+    const response = await fetch(CONFIG.tokenExchangeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        code: authorizationCode
+      })
+    });
+    
+    // Log response status for debugging
+    console.log('Token exchange response status:', response.status);
+    
+    // Parse the JSON response
+    const data = await response.json();
+    
+    if (response.ok) {
+      console.log('Token exchange successful');
+      
+      // Store the tokens securely
+      storeTokens(
+        data.idToken, 
+        data.accessToken, 
+        data.refreshToken, 
+        data.expiresIn
+      );
+      
       return true;
-    } catch (error) {
-      console.error('Token exchange error:', error);
+    } else {
+      console.error('Token exchange failed:', data.error, data.details);
       return false;
     }
+  } catch (error) {
+    console.error('Token exchange error:', error);
+    return false;
   }
-  
+}
+
   
   // Initialize authentication
   async function initAuth() {
