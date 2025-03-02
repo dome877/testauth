@@ -71,38 +71,42 @@ function logout() {
   window.location.href = logoutUrl;
 }
 
-// Handle authentication redirect
+// Update your handleAuthenticationRedirect function
 function handleAuthenticationRedirect() {
-  if (authCodeProcessed) {
-    console.log('Auth code already processed, skipping duplicate handling');
-    return;
-  }
-  
   const urlParams = new URLSearchParams(window.location.search);
   const authorizationCode = urlParams.get('code');
 
   console.log('AUTH.JS: URL parameters check running');
   console.log('URL parameters:', Object.fromEntries(urlParams));
-  console.log('Authorization code present in URL:', authorizationCode ? 'Yes (first 10 chars: ' + authorizationCode.substring(0, 10) + '...)' : 'No');
+  
+  // Don't process if already being processed
+  if (authorizationCode && sessionStorage.getItem('processingAuthCode') === authorizationCode) {
+    console.log('This code is already being processed, waiting for completion');
+    return;
+  }
+  
+  // Don't process if we already have valid tokens
+  if (authorizationCode && isAuthenticated()) {
+    console.log('Already authenticated, no need to process code');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
 
   if (authorizationCode) {
-    // Mark as processed immediately to prevent duplicate calls
-    authCodeProcessed = true;
-    
     console.log('Found authorization code - calling exchangeCodeForTokens');
-    exchangeCodeForTokens(authorizationCode).then(() => {
-      // Remove code from URL after exchange is complete
-      window.history.replaceState({}, document.title, window.location.pathname);
-    });
+    exchangeCodeForTokens(authorizationCode);
   } else {
     console.log('No authorization code found in URL');
   }
 }
 
-// Exchange authorization code for tokens via Lambda
+// Use sessionStorage instead of an in-memory variable to track auth state
 async function exchangeCodeForTokens(authorizationCode) {
   try {
     console.log('Exchanging authorization code for tokens...');
+    
+    // Mark this code as being processed (prevents duplicate processing)
+    sessionStorage.setItem('processingAuthCode', authorizationCode);
     
     const response = await fetch(CONFIG.tokenExchangeUrl, {
       method: 'POST',
@@ -114,18 +118,11 @@ async function exchangeCodeForTokens(authorizationCode) {
       })
     });
     
-    // Log response status for debugging
     console.log('Token exchange response status:', response.status);
-    
-    // Parse the JSON response
     const data = await response.json();
     
-    console.log('Full token response:', data);
-
     if (response.ok) {
       console.log('Token exchange successful');
-      
-      // Store the tokens securely
       storeTokens(
         data.idToken, 
         data.accessToken, 
@@ -133,13 +130,20 @@ async function exchangeCodeForTokens(authorizationCode) {
         data.expiresIn
       );
       
+      // Clear the processing flag
+      sessionStorage.removeItem('processingAuthCode');
+      
+      // IMPORTANT: Only after successful token exchange, update URL
+      window.history.replaceState({}, document.title, window.location.pathname);
       return true;
     } else {
       console.error('Token exchange failed:', data.error, data.details);
+      sessionStorage.removeItem('processingAuthCode');
       return false;
     }
   } catch (error) {
     console.error('Token exchange error:', error);
+    sessionStorage.removeItem('processingAuthCode');
     return false;
   }
 }
