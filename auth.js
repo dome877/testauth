@@ -133,12 +133,7 @@ try {
     ? JSON.parse(data.body)  // Parse if body is a string
     : data.body;             // Use directly if already parsed
     
-  console.log('Parsed tokens structure:', 
-    Object.keys(tokens).reduce((acc, key) => {
-      acc[key] = key.includes('Token') ? 'Present (hidden)' : tokens[key];
-      return acc;
-    }, {})
-  );
+
 
 
   if (response.ok) {
