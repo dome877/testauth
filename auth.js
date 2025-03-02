@@ -99,29 +99,6 @@ async function exchangeCodeForTokens(authorizationCode) {
         throw new Error(data.error || 'Failed to exchange code for tokens');
       }
       
-      // Log token information before storage
-      console.log("About to store tokens:", {
-        idToken: data.idToken ? "present" : "missing",
-        accessToken: data.accessToken ? "present" : "missing",
-        refreshToken: data.refreshToken ? "present" : "missing",
-        expiresIn: data.expiresIn
-      });
-      
-      // Store tokens
-      storeTokens(
-        data.idToken,
-        data.accessToken,
-        data.refreshToken,
-        data.expiresIn
-      );
-      
-      // Verify tokens were stored
-      console.log("Tokens after storage:", {
-        idToken: localStorage.getItem('idToken') ? "present" : "missing",
-        accessToken: localStorage.getItem('accessToken') ? "present" : "missing",
-        refreshToken: localStorage.getItem('refreshToken') ? "present" : "missing"
-      });
-      
       return true;
     } catch (error) {
       console.error('Token exchange error:', error);
