@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Website</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>API Testing Website</h1>
+            <p>This simple website fetches data from the test API endpoint.</p>
+        </header>
+        
+        <main>
+            <div class="button-group">
+                <button id="fetchBtn">Fetch API Data</button>
+                <button id="clearBtn">Clear Results</button>
+            </div>
+            
+            <div id="result">
+                <p>API response will appear here...</p>
+            </div>
+        </main>
+        
+        <footer class="info">
+            <p><strong>API Endpoint:</strong> https://13c2qite21.execute-api.eu-north-1.amazonaws.com/dev/test</p>
+            <p><strong>Note:</strong> This is a test website. Authentication will be implemented later.</p>
+            <p><strong>Status:</strong> <span id="status">Ready</span></p>
+            <p><strong>Last Request:</strong> <span id="timestamp">None</span></p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
