@@ -69,18 +69,37 @@ const CONFIG = {
   }
   
 
-// Add this new function to auth.js
+// Add this function to auth.js
 function handleAuthenticationRedirect() {
   const urlParams = new URLSearchParams(window.location.search);
   const authorizationCode = urlParams.get('code');
   
+  console.log('AUTH.JS: URL parameters check running');
   console.log('URL parameters:', Object.fromEntries(urlParams));
   console.log('Authorization code present in URL:', authorizationCode ? 'Yes (first 10 chars: ' + authorizationCode.substring(0, 10) + '...)' : 'No');
   
   if (authorizationCode) {
+    console.log('Found authorization code - calling exchangeCodeForTokens');
     exchangeCodeForTokens(authorizationCode);
+  } else {
+    console.log('No authorization code found in URL');
   }
 }
+
+// Immediate execution approach that doesn't rely on DOMContentLoaded
+(function() {
+  console.log('AUTH.JS: Self-executing function running');
+  
+  // Run immediately 
+  handleAuthenticationRedirect();
+  
+  // Also attach to DOMContentLoaded as backup
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('AUTH.JS: DOMContentLoaded fired');
+    handleAuthenticationRedirect();
+  });
+})();
+
 
 // Also add this event listener to auth.js
 document.addEventListener('DOMContentLoaded', handleAuthenticationRedirect);
